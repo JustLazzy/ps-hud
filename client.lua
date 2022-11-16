@@ -1138,19 +1138,6 @@ CreateThread(function()
     end
 end)
 
-lib.onCache('ped', function(value)
-    print('old ped:', cache.ped)
-    print('new ped:', value)
-end)
-lib.onCache('playerId', function(value)
-    print('old playerId:', cache.playerId)
-    print('new playerId:', value)
-end)
-lib.onCache('resource', function(value)
-    print('old resource:', cache.resource)
-    print('new resource:', value)
-end)
-
 
 -- Stress Gain
 
