@@ -749,14 +749,13 @@ RegisterNetEvent('hud:client:EnhancementEffect', function(data)
 end)
 
 RegisterCommand('+engine', function()
-    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-    if vehicle == 0 or GetPedInVehicleSeat(vehicle, -1) ~= PlayerPedId() then return end
-    if GetIsVehicleEngineRunning(vehicle) then
+    if not cache.vehicle or cache.vehicle == 0 or cache.seat ~= -1 then return end
+    if GetIsVehicleEngineRunning(cache.vehicle) then
         QBCore.Functions.Notify(Lang:t("notify.engine_off"))
     else
         QBCore.Functions.Notify(Lang:t("notify.engine_on"))
     end
-    SetVehicleEngineOn(vehicle, not GetIsVehicleEngineRunning(vehicle), false, true)
+    SetVehicleEngineOn(cache.vehicle, not GetIsVehicleEngineRunning(cache.vehicle), false, true)
 end, false)
 
 RegisterKeyMapping('+engine', 'Toggle Engine', 'keyboard', 'G')
@@ -889,13 +888,9 @@ local function getFuelLevel(vehicle)
     return lastFuelCheck
 end
 
-InVehicle = false
 VehicleType = nil
-VehicleModel = nil
 lib.onCache('vehicle', function(vehicle)
     if vehicle then
-        InVehicle = true
-        VehicleModel = vehicle
         local model = GetEntityModel(vehicle)
         if IsThisModelAHeli(model) or IsThisModelAPlane(model) then
             VehicleType = "plane"
@@ -907,11 +902,26 @@ lib.onCache('vehicle', function(vehicle)
             VehicleType = "bicycle"
         end
     else
-        InVehicle = false
         VehicleType = nil
-        VehicleModel = nil
     end
 end)
+
+
+-- function GetVehicleType(vehicle)
+--     if not DoesEntityExist(vehicle) then return end
+--     local model = GetEntityModel(vehicle)
+--     local VehicleType
+--     if IsThisModelAHeli(model) or IsThisModelAPlane(model) then
+--         VehicleType = "plane"
+--     elseif IsThisModelACar(model) then
+--         VehicleType = "car"
+--     elseif IsThisModelABike(model) then
+--         VehicleType = "bike"
+--     elseif IsThisModelABicycle(model) then
+--         VehicleType = "bicycle"
+--     end
+--     return VehicleT
+-- end
 
 CreateThread(function()
     while true do
@@ -1013,7 +1023,7 @@ CreateThread(function()
                 nitroActive,
                 harness,
                 hp,
-                math.ceil(GetEntitySpeed(VehicleModel) * speedMultiplier),
+                math.ceil(GetEntitySpeed(cache.vehicle) * speedMultiplier),
                 -1,
                 Menu.isCineamticModeChecked,
                 dev,
@@ -1023,19 +1033,19 @@ CreateThread(function()
 
             -- Vehicle hud
 
-            if InVehicle and VehicleType == "plane" then
+            if cache.vehicle and VehicleType == "plane" then
                 showAltitude = true
                 showSeatbelt = false
             end
 
-            if InVehicle and VehicleType ~= "bicycle" then
+            if cache.vehicle and VehicleType ~= "bicycle" then
                 DisplayRadar(Menu.isMapEnabledChecked)
                 updateVehicleHud({
                     show,
                     not show,
                     seatbeltOn,
-                    math.ceil(GetEntitySpeed(VehicleModel) * speedMultiplier),
-                    getFuelLevel(VehicleModel),
+                    math.ceil(GetEntitySpeed(cache.vehicle) * speedMultiplier),
+                    getFuelLevel(cache.vehicle),
                     math.ceil(GetEntityCoords(player).z * 0.5),
                     showAltitude,
                     showSeatbelt,
@@ -1045,7 +1055,7 @@ CreateThread(function()
                 showAltitude = false
                 showSeatbelt = true
             else
-                if not InVehicle then
+                if not cache.vehicle then
                     updateShowVehicleHud(false)
                     prevVehicleStats[1] = false
                     prevVehicleStats[3] = false
@@ -1078,9 +1088,9 @@ end
 -- Low fuel
 CreateThread(function()
     while true do
-        if PlayerLoaded and InVehicle and VehicleType ~= "bicycle" then
-            if not isElectric(VehicleModel) then
-                if GetVehicleFuelLevel(VehicleModel) <= 20 then -- At 20% Fuel Left
+        if PlayerLoaded and cache.vehicle and VehicleType ~= "bicycle" then
+            if not isElectric(cache.vehicle) then
+                if GetVehicleFuelLevel(cache.vehicle) <= 20 then -- At 20% Fuel Left
                     if Menu.isLowFuelChecked then
                         TriggerServerEvent("InteractSound_SV:PlayOnSource", "pager", 0.10)
                         QBCore.Functions.Notify(Lang:t("notify.low_fuel"), "error")
@@ -1128,7 +1138,7 @@ end)
 
 CreateThread(function()
     while true do
-        if PlayerLoaded and InVehicle and VehicleType == "car" then
+        if PlayerLoaded and cache.vehicle and VehicleType == "car" then
             hasHarness()
             if seatbeltOn ~= true then
                 TriggerEvent("InteractSound_CL:PlayOnOne", "beltalarm", 0.6)
@@ -1143,8 +1153,8 @@ end)
 
 CreateThread(function() -- Speeding
     while true do
-        if PlayerLoaded and InVehicle then
-            local speed = GetEntitySpeed(VehicleModel) * speedMultiplier
+        if PlayerLoaded and cache.vehicle then
+            local speed = GetEntitySpeed(cache.vehicle) * speedMultiplier
             local stressSpeed = seatbeltOn and config.MinimumSpeed or config.MinimumSpeedUnbuckled
             if speed >= stressSpeed then
                 TriggerServerEvent('hud:server:GainStress', math.random(1, 3))
@@ -1332,7 +1342,7 @@ CreateThread(function()
     local lastIsOutCompassCheck = Menu.isOutCompassChecked
     while true do
         sleep = 1000
-        if PlayerLoaded and InVehicle then
+        if PlayerLoaded and cache.vehicle then
             sleep = 500
             local show = true
             local player = PlayerPedId()
@@ -1348,7 +1358,7 @@ CreateThread(function()
                 heading = '0'
             end
             if heading ~= lastHeading then
-                if InVehicle then
+                if cache.vehicle then
                     local crossroads = getCrossroads(player)
                     SendNUIMessage({
                         action = 'update',
@@ -1390,7 +1400,7 @@ CreateThread(function()
                 end
             end
             lastHeading = heading
-            if lastIsOutCompassCheck ~= Menu.isOutCompassChecked and not InVehicle then
+            if lastIsOutCompassCheck ~= Menu.isOutCompassChecked and not cache.vehicle then
                 if not Menu.isOutCompassChecked then
                     SendNUIMessage({
                         action = 'baseplate',
